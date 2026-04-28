@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Control Completitud Mercado</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .card-btn { @apply flex items-center justify-center p-4 rounded-xl font-semibold text-sm shadow-sm hover:opacity-90 transition text-center; }
+    .input    { @apply w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 focus:outline-none; }
+    .input-sm { @apply border border-gray-300 rounded-lg px-2 py-1 text-xs focus:ring-1 focus:ring-blue-400 focus:outline-none w-full; }
+    .label    { @apply block text-sm font-medium text-gray-700 mb-1; }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+
+  <!-- Navbar -->
+  <header class="bg-blue-700 text-white shadow-md">
+    <div class="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
+      <a href="#home" class="flex items-center gap-2 font-bold text-lg hover:opacity-90">
+        <span>🛒</span>
+        <span class="hidden sm:inline">Completitud Mercado</span>
+        <span class="sm:hidden">Completitud</span>
+      </a>
+      <nav class="flex gap-4 text-sm font-medium">
+        <a href="#nuevo"   class="hover:text-yellow-300 transition">＋ Nuevo</a>
+        <a href="#resumen" class="hover:text-yellow-300 transition">Resumen</a>
+        <a href="#config"  class="hover:text-yellow-300 transition">Config</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Main -->
+  <main class="max-w-4xl mx-auto px-4 py-6">
+    <div id="app">
+      <div class="flex justify-center py-16">
+        <div class="animate-spin h-8 w-8 border-4 border-blue-600 border-t-transparent rounded-full"></div>
+      </div>
+    </div>
+  </main>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
