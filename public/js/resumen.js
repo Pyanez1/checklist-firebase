@@ -11,7 +11,8 @@ const SECS  = ["SALA", "BODEGA"];
 // ─ Estado de filtro de fecha ───────────────────────────────────────────────
 let _filterFrom = "";
 let _filterTo   = "";
-let _allDocs    = null; // cache
+let _filterMode = "rango"; // "rango" | "fecha"
+let _allDocs    = null;    // cache
 
 function tabBtnCls(active) {
   return active
@@ -97,8 +98,30 @@ function renderShell() {
     { id: "dashboard", label: "Resumen" },
     { id: "desempeno", label: "Desempeno por Local" },
   ];
-  const filterLabel = (_filterFrom || _filterTo)
-    ? `<span class="ml-2 text-xs text-blue-600 font-semibold">Filtro activo</span>` : "";
+
+  const hasFilter = _filterFrom || _filterTo;
+
+  // Sub-tabs del modo de filtro
+  const modeBtnCls = active => active
+    ? "px-3 py-1 text-xs font-semibold rounded-md bg-blue-600 text-white"
+    : "px-3 py-1 text-xs font-medium rounded-md text-gray-500 hover:bg-gray-100";
+
+  const filterBody = _filterMode === "fecha"
+    ? `<div>
+         <label class="label text-xs">Fecha</label>
+         <input type="date" id="filterFecha" value="${_filterFrom}"
+           class="input text-sm" style="width:160px">
+       </div>`
+    : `<div>
+         <label class="label text-xs">Desde</label>
+         <input type="date" id="filterFrom" value="${_filterFrom}"
+           class="input text-sm" style="width:140px">
+       </div>
+       <div>
+         <label class="label text-xs">Hasta</label>
+         <input type="date" id="filterTo" value="${_filterTo}"
+           class="input text-sm" style="width:140px">
+       </div>`;
 
   document.getElementById("app").innerHTML = `
     <div class="flex items-center gap-3 mb-4">
@@ -108,29 +131,31 @@ function renderShell() {
     </div>
 
     <!-- Filtro de fecha -->
-    <div class="bg-white border border-gray-200 rounded-xl px-4 py-3 mb-5
-                flex flex-wrap gap-3 items-end shadow-sm">
-      <div>
-        <label class="label text-xs">Desde</label>
-        <input type="date" id="filterFrom" value="${_filterFrom}"
-          class="input text-sm" style="width:140px">
+    <div class="bg-white border border-gray-200 rounded-xl px-4 pt-3 pb-4 mb-5 shadow-sm">
+
+      <!-- Modo tabs -->
+      <div class="flex items-center gap-1 mb-3 pb-2 border-b border-gray-100">
+        <span class="text-xs font-semibold text-gray-400 mr-2 uppercase tracking-wide">Filtrar por</span>
+        <button id="modeRango" class="${modeBtnCls(_filterMode === "rango")}">Rango de fechas</button>
+        <button id="modeFecha" class="${modeBtnCls(_filterMode === "fecha")}">Fecha espec&iacute;fica</button>
       </div>
-      <div>
-        <label class="label text-xs">Hasta</label>
-        <input type="date" id="filterTo" value="${_filterTo}"
-          class="input text-sm" style="width:140px">
+
+      <!-- Inputs según modo -->
+      <div class="flex flex-wrap gap-3 items-end">
+        ${filterBody}
+        <button id="btnFiltrar"
+          class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+          Aplicar
+        </button>
+        ${hasFilter
+          ? `<button id="btnLimpiar"
+               class="px-4 py-2 rounded-lg text-sm text-gray-500 hover:text-gray-700
+                      border border-gray-300 hover:bg-gray-50">
+               Limpiar
+             </button>
+             <span class="text-xs text-blue-600 font-semibold self-center">Filtro activo</span>`
+          : ""}
       </div>
-      <button id="btnFiltrar"
-        class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">
-        Aplicar filtro
-      </button>
-      ${(_filterFrom || _filterTo)
-        ? `<button id="btnLimpiar"
-             class="px-4 py-2 rounded-lg text-sm text-gray-500 hover:text-gray-700
-                    border border-gray-300 hover:bg-gray-50">
-             Limpiar
-           </button>` : ""}
-      ${filterLabel}
     </div>
 
     <!-- Tabs -->
@@ -145,10 +170,27 @@ function renderShell() {
 function bindTabs(stats, docs) {
   let activeTab = "dashboard";
 
-  // Filtro de fecha
+  // ─ Cambio de modo del filtro ─────────────────────────────────────────────
+  const switchMode = mode => {
+    _filterMode = mode;
+    _filterFrom = _filterTo = ""; // reset al cambiar modo
+    renderShell();
+    bindTabs(stats, docs); // re-bind con los mismos datos (sin recargar Firebase)
+    if (activeTab === "dashboard") renderTabResumen(stats, docs);
+    else                           renderTabDesempeno(stats, docs);
+  };
+  document.getElementById("modeRango")?.addEventListener("click", () => switchMode("rango"));
+  document.getElementById("modeFecha")?.addEventListener("click", () => switchMode("fecha"));
+
+  // ─ Aplicar filtro ──────────────────────────────────────────────────────
   const applyDateFilter = async () => {
-    _filterFrom = document.getElementById("filterFrom")?.value || "";
-    _filterTo   = document.getElementById("filterTo")?.value   || "";
+    if (_filterMode === "fecha") {
+      const d = document.getElementById("filterFecha")?.value || "";
+      _filterFrom = _filterTo = d;
+    } else {
+      _filterFrom = document.getElementById("filterFrom")?.value || "";
+      _filterTo   = document.getElementById("filterTo")?.value   || "";
+    }
     const { stats: s2, docs: d2 } = await loadStats();
     renderShell();
     bindTabs(s2, d2);
@@ -156,8 +198,11 @@ function bindTabs(stats, docs) {
     else                           renderTabDesempeno(s2, d2);
   };
   document.getElementById("btnFiltrar")?.addEventListener("click", applyDateFilter);
-  document.getElementById("filterFrom")?.addEventListener("keydown", e => e.key === "Enter" && applyDateFilter());
-  document.getElementById("filterTo")?.addEventListener("keydown",   e => e.key === "Enter" && applyDateFilter());
+  document.getElementById("filterFecha")?.addEventListener("keydown", e => e.key === "Enter" && applyDateFilter());
+  document.getElementById("filterFrom")?.addEventListener("keydown",  e => e.key === "Enter" && applyDateFilter());
+  document.getElementById("filterTo")?.addEventListener("keydown",    e => e.key === "Enter" && applyDateFilter());
+
+  // ─ Limpiar ───────────────────────────────────────────────────────────
   document.getElementById("btnLimpiar")?.addEventListener("click", async () => {
     _filterFrom = _filterTo = "";
     const { stats: s2, docs: d2 } = await loadStats();
@@ -166,7 +211,7 @@ function bindTabs(stats, docs) {
     renderTabResumen(s2, d2);
   });
 
-  // Tabs
+  // ─ Tabs de contenido ──────────────────────────────────────────────────
   document.querySelectorAll(".res-tab").forEach(btn => {
     btn.addEventListener("click", () => {
       activeTab = btn.dataset.tab;
@@ -181,12 +226,15 @@ function bindTabs(stats, docs) {
 // ── TAB 1: Resumen ──────────────────────────────────────────────────────────────
 function renderTabResumen(stats, docs) {
   const totalDocs = docs?.length ?? 0;
-  const periodoBanner = (_filterFrom || _filterTo)
+  const hasFilter = _filterFrom || _filterTo;
+  const periodoBanner = hasFilter
     ? `<div class="text-xs text-blue-600 bg-blue-50 border border-blue-100
                   rounded-lg px-3 py-2 mb-4 font-medium">
-         Mostrando ${totalDocs} registro(s)
-         ${_filterFrom ? `desde <strong>${_filterFrom}</strong>` : ""}
-         ${_filterTo   ? `hasta <strong>${_filterTo}</strong>`   : ""}
+         Mostrando <strong>${totalDocs}</strong> registro(s) &mdash;
+         ${_filterMode === "fecha" && _filterFrom
+           ? `Fecha: <strong>${_filterFrom}</strong>`
+           : `${_filterFrom ? `desde <strong>${_filterFrom}</strong>` : ""}
+              ${_filterTo   ? `hasta <strong>${_filterTo}</strong>`   : ""}`}
        </div>` : "";
   // Panel por sección
   const secPanel = sec => {
