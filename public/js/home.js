@@ -139,7 +139,7 @@ export async function home() {
   document.getElementById("app").innerHTML = `
     <div class="flex items-center justify-between mb-6">
       <div>
-        <h1 class="text-xl font-bold text-gray-800">Control Completitud Mercado</h1>
+        <h1 class="text-xl font-bold text-gray-800">Check Rutinas Completitud</h1>
         <p class="text-gray-400 text-sm">Rutinas de disponibilidad por local y turno</p>
       </div>
       <div class="flex gap-2">

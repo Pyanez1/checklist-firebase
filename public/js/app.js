@@ -52,6 +52,51 @@ async function nuevo() {
 
   document.getElementById("app").innerHTML = `
     ${nav("Nuevo Checklist")}
+
+    <!-- Ilustracion -->
+    <div class="max-w-lg mb-5 rounded-2xl bg-gradient-to-br from-blue-600 to-blue-800
+                text-white flex items-center gap-5 px-6 py-5 overflow-hidden relative">
+      <!-- Circulos decorativos -->
+      <div class="absolute -top-6 -right-6 w-24 h-24 rounded-full bg-white/5"></div>
+      <div class="absolute -bottom-4 -left-4 w-16 h-16 rounded-full bg-white/5"></div>
+
+      <!-- SVG Clipboard -->
+      <svg width="72" height="84" viewBox="0 0 72 84" fill="none"
+           xmlns="http://www.w3.org/2000/svg" class="flex-shrink-0">
+        <!-- Cuerpo del clipboard -->
+        <rect x="6" y="12" width="60" height="68" rx="7" fill="white" fill-opacity=".15"/>
+        <rect x="6" y="12" width="60" height="68" rx="7" stroke="white" stroke-opacity=".35" stroke-width="1.5"/>
+        <!-- Gancho (spark amarillo) -->
+        <rect x="24" y="6" width="24" height="14" rx="5" fill="#ffc220"/>
+        <rect x="30" y="3" width="12" height="9" rx="3" fill="#ffc220"/>
+        <circle cx="36" cy="9" r="3" fill="#0053e2"/>
+        <!-- Fila 1 - tachada (cumple) -->
+        <rect x="16" y="32" width="40" height="4" rx="2" fill="white" fill-opacity=".2"/>
+        <!-- Check 1 -->
+        <circle cx="22" cy="34" r="5" fill="#ffc220"/>
+        <polyline points="19,34 21.5,36.5 26,31" stroke="#0053e2"
+          stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        <!-- Fila 2 - tachada (cumple) -->
+        <rect x="16" y="46" width="40" height="4" rx="2" fill="white" fill-opacity=".2"/>
+        <!-- Check 2 -->
+        <circle cx="22" cy="48" r="5" fill="#ffc220"/>
+        <polyline points="19,48 21.5,50.5 26,45" stroke="#0053e2"
+          stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        <!-- Fila 3 - pendiente -->
+        <rect x="16" y="60" width="40" height="4" rx="2" fill="white" fill-opacity=".2"/>
+        <circle cx="22" cy="62" r="5" fill="white" fill-opacity=".3"/>
+      </svg>
+
+      <!-- Texto -->
+      <div class="flex-1 min-w-0">
+        <p class="text-xs font-bold text-yellow-300 uppercase tracking-widest mb-0.5">Walmart Chile</p>
+        <h2 class="text-lg font-black leading-tight mb-1">Check Rutinas<br>Completitud</h2>
+        <p class="text-blue-200 text-xs leading-snug">
+          Completa los datos del local y turno<br>para iniciar el registro de rutinas.
+        </p>
+      </div>
+    </div>
+
     <div class="bg-white rounded-xl shadow-sm border p-6 max-w-lg">
       <form id="fmNuevo" class="space-y-4">
         <div>
