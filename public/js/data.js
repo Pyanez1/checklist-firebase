@@ -89,11 +89,12 @@ export function getItems(seccion, turno) {
 }
 
 // ── Restricciones horarias por defecto ───────────────────────────────────────
+// activo:false por defecto → sin restricciones hasta que el usuario las active en Config
 export const DEFAULT_RESTRICTIONS = [
-  { seccion:"SALA",   turno:"AM",    hora_inicio:"07:00", hora_fin:"15:30", activo:true },
-  { seccion:"SALA",   turno:"PM",    hora_inicio:"14:30", hora_fin:"22:30", activo:true },
-  { seccion:"SALA",   turno:"NOCHE", hora_inicio:"21:30", hora_fin:"07:30", activo:true },
-  { seccion:"BODEGA", turno:"AM",    hora_inicio:"07:00", hora_fin:"15:30", activo:true },
-  { seccion:"BODEGA", turno:"PM",    hora_inicio:"14:30", hora_fin:"22:30", activo:true },
-  { seccion:"BODEGA", turno:"NOCHE", hora_inicio:"21:30", hora_fin:"07:30", activo:true },
+  { seccion:"SALA",   turno:"AM",    hora_inicio:"07:00", hora_fin:"15:30", activo:false },
+  { seccion:"SALA",   turno:"PM",    hora_inicio:"14:30", hora_fin:"22:30", activo:false },
+  { seccion:"SALA",   turno:"NOCHE", hora_inicio:"21:30", hora_fin:"07:30", activo:false },
+  { seccion:"BODEGA", turno:"AM",    hora_inicio:"07:00", hora_fin:"15:30", activo:false },
+  { seccion:"BODEGA", turno:"PM",    hora_inicio:"14:30", hora_fin:"22:30", activo:false },
+  { seccion:"BODEGA", turno:"NOCHE", hora_inicio:"21:30", hora_fin:"07:30", activo:false },
 ];

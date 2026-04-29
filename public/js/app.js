@@ -147,34 +147,48 @@ async function nuevo() {
         <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition">
           Iniciar Checklist →
         </button>
-        <div id="err" class="hidden text-red-600 text-sm font-medium"></div>
+        <div id="err" class="hidden bg-red-50 border border-red-300 text-red-700 text-sm font-medium px-4 py-3 rounded-lg"></div>
       </form>
     </div>`;
 
   document.getElementById("fmNuevo").addEventListener("submit", async e => {
     e.preventDefault();
-    const fd  = new FormData(e.target);
-    const sec = fd.get("seccion"), tur = fd.get("turno");
+    const btn    = e.target.querySelector("button[type=submit]");
+    const errDiv = document.getElementById("err");
+    const showErr = msg => {
+      errDiv.classList.remove("hidden");
+      errDiv.textContent = msg;
+      btn.disabled = false;
+      btn.textContent = "Iniciar Checklist →";
+    };
 
-    // Verificar horario
-    const ok = await checkHorario(sec, tur);
-    if (!ok.allowed) {
-      document.getElementById("err").classList.remove("hidden");
-      document.getElementById("err").textContent = ok.msg;
-      return;
+    btn.disabled = true;
+    btn.textContent = "Creando...";
+    errDiv.classList.add("hidden");
+
+    try {
+      const fd  = new FormData(e.target);
+      const sec = fd.get("seccion"), tur = fd.get("turno");
+
+      // Verificar horario
+      const ok = await checkHorario(sec, tur);
+      if (!ok.allowed) { showErr(ok.msg); return; }
+
+      const ref = await addDoc(collection(db, "submissions"), {
+        local:       Number(fd.get("local")),
+        fecha:       fd.get("fecha"),
+        seccion:     sec,
+        turno:       tur,
+        responsable: fd.get("responsable"),
+        estado:      "borrador",
+        created_at:  serverTimestamp(),
+        updated_at:  serverTimestamp(),
+      });
+      location.hash = `editar/${ref.id}`;
+    } catch(err) {
+      console.error("Error creando checklist:", err);
+      showErr("Error al guardar: " + err.message + " — revisa reglas de Firestore.");
     }
-
-    const ref = await addDoc(collection(db, "submissions"), {
-      local:       Number(fd.get("local")),
-      fecha:       fd.get("fecha"),
-      seccion:     sec,
-      turno:       tur,
-      responsable: fd.get("responsable"),
-      estado:      "borrador",
-      created_at:  serverTimestamp(),
-      updated_at:  serverTimestamp(),
-    });
-    location.hash = `editar/${ref.id}`;
   });
 }
 
@@ -190,6 +204,17 @@ async function editar(id) {
   const rSnap = await getDocs(collection(db, "submissions", id, "responses"));
   const saved = {};
   rSnap.forEach(d => { saved[d.id] = d.data(); });
+
+  if (items.length === 0) {
+    document.getElementById("app").innerHTML = `
+      ${nav(`Local ${sub.local} · ${sub.seccion} ${sub.turno} · ${sub.fecha}`)}
+      <div class="bg-yellow-50 border border-yellow-200 rounded-xl p-6 text-center">
+        <p class="text-yellow-800 font-semibold">Sin rutinas para ${sub.seccion} - ${sub.turno}</p>
+        <p class="text-yellow-600 text-sm mt-1">Verifica que la sección y turno sean correctos.</p>
+        <a href="#home" class="mt-4 inline-block text-blue-600 underline text-sm">Volver al inicio</a>
+      </div>`;
+    return;
+  }
 
   const cards = items.map(item => {
     const r = saved[item.id] || {};
@@ -287,15 +312,23 @@ async function saveItem(subId, itemId) {
   setTimeout(() => saved.classList.add("hidden"), 2000);
 }
 
-// ── RESUMEN ───────────────────────────────────────────────────────────────────
+// ── RESUMEN ──────────────────────────────────────────────────────────────────────
 async function resumen() {
-  const q   = query(collection(db, "submissions"), orderBy("fecha", "desc"));
-  const snp = await getDocs(q);
-  const docs = snp.docs.map(d => ({ id: d.id, ...d.data() }));
+  let allDocs = [];
+  try {
+    const q   = query(collection(db, "submissions"), orderBy("fecha", "desc"));
+    const snp = await getDocs(q);
+    allDocs   = snp.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch(_) {
+    // Fallback sin orden si falta el índice Firestore
+    const snp = await getDocs(collection(db, "submissions"));
+    allDocs   = snp.docs.map(d => ({ id: d.id, ...d.data() }))
+                        .sort((a,b) => (b.fecha||'').localeCompare(a.fecha||''));
+  }
 
   // Agrupar por local
   const porLocal = {};
-  docs.forEach(s => {
+  allDocs.forEach(s => {
     if (!porLocal[s.local]) porLocal[s.local] = { total:0, enviados:0, ultima:"" };
     const g = porLocal[s.local];
     g.total++;
@@ -312,7 +345,7 @@ async function resumen() {
       <td class="px-4 py-3 text-center">${g.ultima || "—"}</td>
     </tr>`).join("") || `<tr><td colspan="5" class="text-center py-8 text-gray-400">Sin datos</td></tr>`;
 
-  const detailRows = docs.slice(0, 50).map(s => `
+  const detailRows = allDocs.slice(0, 50).map(s => `
     <tr class="hover:bg-gray-50 cursor-pointer" onclick="location.hash='editar/${s.id}'">
       <td class="px-3 py-2 font-medium text-blue-700">Local ${s.local}</td>
       <td class="px-3 py-2">${s.fecha}</td>
@@ -361,14 +394,15 @@ async function resumen() {
     </div>`;
 }
 
-// ── CONFIG ────────────────────────────────────────────────────────────────────
+// ── CONFIG ──────────────────────────────────────────────────────────────────────
 async function configuracion() {
   // Cargar restricciones desde Firestore, si no existen usar defaults
   const cfgRef = doc(db, "config", "time_restrictions");
-  const cfgSnp = await getDoc(cfgRef);
-  const restrictions = cfgSnp.exists()
-    ? cfgSnp.data().restrictions
-    : DEFAULT_RESTRICTIONS;
+  let restrictions = DEFAULT_RESTRICTIONS;
+  try {
+    const cfgSnp = await getDoc(cfgRef);
+    if (cfgSnp.exists()) restrictions = cfgSnp.data().restrictions;
+  } catch(_) { /* usa defaults si Firestore falla */ }
 
   const rows = restrictions.map((r, i) => `
     <tr>
@@ -425,13 +459,13 @@ async function configuracion() {
   });
 }
 
-// ── Verificación horaria ──────────────────────────────────────────────────────
+// ── Verificación horaria ────────────────────────────────────────────
 async function checkHorario(seccion, turno) {
-  const cfgRef = doc(db, "config", "time_restrictions");
-  const cfgSnp = await getDoc(cfgRef);
-  const restrictions = cfgSnp.exists()
-    ? cfgSnp.data().restrictions
-    : DEFAULT_RESTRICTIONS;
+  let restrictions = DEFAULT_RESTRICTIONS;
+  try {
+    const cfgSnp = await getDoc(doc(db, "config", "time_restrictions"));
+    if (cfgSnp.exists()) restrictions = cfgSnp.data().restrictions;
+  } catch(_) { /* usa defaults si Firestore no responde */ }
 
   const rule = restrictions.find(r => r.seccion === seccion && r.turno === turno);
   if (!rule || !rule.activo) return { allowed: true, msg: "" };
