@@ -138,12 +138,13 @@ async function editar(id) {
   const saved = {};
   rSnap.forEach(d => { saved[d.id] = d.data(); });
 
-  // Cargar horario de la seccion/turno para mostrarlo en pantalla
-  let ventana = null;
+  // Cargar TODOS los horarios de la seccion para mostrarlos en pantalla
+  let allRules = [];
+  let ventana  = null;
   try {
     const cfgSnap = await getDoc(doc(db, "config", "time_restrictions"));
-    const rules   = cfgSnap.exists() ? cfgSnap.data().restrictions : DEFAULT_RESTRICTIONS;
-    ventana = rules.find(r => r.seccion === sub.seccion && r.turno === sub.turno) || null;
+    allRules = cfgSnap.exists() ? cfgSnap.data().restrictions : DEFAULT_RESTRICTIONS;
+    ventana  = allRules.find(r => r.seccion === sub.seccion && r.turno === sub.turno) || null;
   } catch(_) {}
 
   if (items.length === 0) {
@@ -206,21 +207,35 @@ async function editar(id) {
 
   const isEnviado = sub.estado === "enviado";
 
-  // Banner de ventana horaria
-  const ventanaBanner = ventana
-    ? `<div class="flex items-center gap-2 text-xs rounded-lg px-3 py-2 mb-3 ${
-        ventana.activo
-          ? "bg-blue-50 border border-blue-100 text-blue-700"
-          : "bg-gray-50 border border-gray-200 text-gray-500"
-      }">
-        <span>&#9200;</span>
-        <span>Plazo de ingreso <strong>${sub.seccion} &ndash; ${sub.turno}:</strong>
-          ${ventana.activo
-            ? `<strong>${ventana.hora_inicio} &ndash; ${ventana.hora_fin}</strong>`
-            : "Sin restriccion horaria activa"
-          }
-        </span>
-      </div>`
+  // Grilla de horarios — todos los turnos de la misma seccion
+  const secRules = allRules.filter(r => r.seccion === sub.seccion);
+  const turnoCards = secRules.map(r => {
+    const esCurrent = r.turno === sub.turno;
+    const base = esCurrent
+      ? "border-2 border-blue-500 bg-blue-50"
+      : "border border-gray-200 bg-white";
+    const labelCls = esCurrent ? "font-black text-blue-700" : "font-semibold text-gray-600";
+    const horaCls  = esCurrent ? "text-blue-600" : "text-gray-500";
+    const tag = esCurrent
+      ? `<span class="ml-1 text-xs bg-blue-600 text-white rounded px-1 py-0.5 align-middle">Actual</span>`
+      : "";
+    const hora = r.activo
+      ? `<span class="${horaCls} font-semibold">${r.hora_inicio} &ndash; ${r.hora_fin}</span>`
+      : `<span class="text-gray-300 text-xs">Sin restricci&oacute;n</span>`;
+    return `
+      <div class="rounded-xl px-3 py-2.5 text-xs ${base}">
+        <div class="${labelCls} mb-0.5">${r.turno}${tag}</div>
+        <div>&#9200; ${hora}</div>
+      </div>`;
+  }).join("");
+
+  const horarioPanel = secRules.length
+    ? `<div class="mb-4">
+         <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">
+           &#9200; Horarios de ingreso &mdash; ${sub.seccion}
+         </p>
+         <div class="grid grid-cols-3 gap-2">${turnoCards}</div>
+       </div>`
     : "";
 
   document.getElementById("app").innerHTML = `
@@ -237,7 +252,7 @@ async function editar(id) {
           : ""}
       </div>
     </div>
-    ${ventanaBanner}
+    ${horarioPanel}
     <div id="errEnviar" class="hidden mb-3 bg-red-50 border border-red-300 text-red-700 text-sm font-medium px-4 py-3 rounded-lg">
       Completa las <strong>observaciones</strong> de todos los items antes de enviar.
     </div>
