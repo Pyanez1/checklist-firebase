@@ -1,6 +1,6 @@
 import { db } from "./firebase.js";
 import { collection, addDoc, doc, getDoc, getDocs,
-         setDoc, updateDoc, query, orderBy, serverTimestamp }
+         setDoc, updateDoc, deleteDoc, query, orderBy, serverTimestamp }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { LOCALES, TURNOS, getItems, DEFAULT_RESTRICTIONS } from "./data.js";
 import { configuracion, loadRutinas } from "./config.js";
@@ -58,6 +58,72 @@ async function getItemsDB(seccion, turno) {
   return getItems(seccion, turno);
 }
 
+// ── Admin helpers ─────────────────────────────────────────────────────────────
+const isAdmin = () => !!sessionStorage.getItem("cfg_auth");
+
+function showAdminModal(onSuccess) {
+  const overlay = document.createElement("div");
+  overlay.id = "adminOverlay";
+  overlay.className = "fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm";
+  overlay.innerHTML = `
+    <div class="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm mx-4">
+      <h2 class="text-lg font-bold text-gray-800 mb-1">Acceso administrador</h2>
+      <p class="text-sm text-gray-500 mb-4">Ingresa la contrasena para continuar.</p>
+      <input type="password" id="adminPwIn" placeholder="Contrasena"
+        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-3
+               focus:outline-none focus:ring-2 focus:ring-blue-400">
+      <div class="flex gap-2">
+        <button id="adminPwBtn"
+          class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-lg text-sm">
+          Ingresar
+        </button>
+        <button id="adminCancelBtn"
+          class="px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 rounded-lg text-sm">
+          Cancelar
+        </button>
+      </div>
+      <p id="adminErr" class="hidden text-red-600 text-xs mt-2 font-medium">Contrasena incorrecta.</p>
+    </div>`;
+  document.body.appendChild(overlay);
+  setTimeout(() => document.getElementById("adminPwIn")?.focus(), 80);
+
+  document.getElementById("adminCancelBtn").onclick = () => overlay.remove();
+
+  const verify = async () => {
+    const val = document.getElementById("adminPwIn").value.trim();
+    let stored = "admin1234";
+    try {
+      const s = await getDoc(doc(db, "config", "auth"));
+      if (s.exists()) stored = s.data().password || stored;
+    } catch(_) {}
+    if (val === stored) {
+      sessionStorage.setItem("cfg_auth", "1");
+      overlay.remove();
+      onSuccess();
+    } else {
+      document.getElementById("adminErr").classList.remove("hidden");
+      document.getElementById("adminPwIn").value = "";
+      document.getElementById("adminPwIn").focus();
+    }
+  };
+  document.getElementById("adminPwBtn").onclick = verify;
+  document.getElementById("adminPwIn").onkeydown = e => { if (e.key === "Enter") verify(); };
+}
+
+async function deleteSubmission(subId) {
+  if (!confirm("Eliminar este registro y todas sus respuestas? Esta accion no se puede deshacer.")) return;
+  try {
+    // Borrar respuestas de la subcoleccion
+    const respDocs = await getDocs(collection(db, "submissions", subId, "responses"));
+    await Promise.all(respDocs.docs.map(d => deleteDoc(d.ref)));
+    // Borrar el submission
+    await deleteDoc(doc(db, "submissions", subId));
+    home(); // refrescar
+  } catch(e) {
+    alert("Error al eliminar: " + e.message);
+  }
+}
+
 // ── HOME ───────────────────────────────────────────────────────────────────────
 async function home() {
   let snpDocs = [];
@@ -68,27 +134,57 @@ async function home() {
     snpDocs = (await getDocs(collection(db, "submissions"))).docs;
   }
 
-  const rows = snpDocs.slice(0, 10).map(d => {
+  const admin = isAdmin();
+
+  const rows = snpDocs.slice(0, 20).map(d => {
     const s = d.data();
+    const delBtn = admin
+      ? `<button class="btn-del text-red-500 hover:text-red-700 text-xs px-2 py-1
+                        bg-red-50 hover:bg-red-100 rounded font-medium"
+                 data-id="${d.id}" onclick="event.stopPropagation()">
+           Eliminar
+         </button>`
+      : "";
     return `<tr class="hover:bg-gray-50 cursor-pointer" onclick="location.hash='editar/${d.id}'">
       <td class="px-4 py-3 font-medium">Local ${s.local}</td>
       <td class="px-4 py-3">${s.fecha}</td>
       <td class="px-4 py-3">${s.seccion} &ndash; ${s.turno}</td>
       <td class="px-4 py-3">${s.responsable || "&mdash;"}</td>
       <td class="px-4 py-3">${badge(s.estado)}</td>
+      ${admin ? `<td class="px-4 py-3">${delBtn}</td>` : ""}
     </tr>`;
-  }).join("") || `<tr><td colspan="5" class="text-center py-8 text-gray-400">Sin registros aun</td></tr>`;
+  }).join("") || `<tr><td colspan="${admin ? 6 : 5}" class="text-center py-8 text-gray-400">Sin registros aun</td></tr>`;
+
+  const adminBar = admin
+    ? `<div class="flex items-center gap-2 mb-4 bg-yellow-50 border border-yellow-200
+                  rounded-lg px-3 py-2 text-xs text-yellow-800">
+         <span class="font-bold">Modo Admin activo</span>
+         <span class="text-yellow-600">&mdash; Los botones Eliminar son visibles.</span>
+         <button id="btnSalirAdmin"
+           class="ml-auto text-xs text-yellow-700 underline hover:text-yellow-900">
+           Salir
+         </button>
+       </div>`
+    : `<div class="flex justify-end mb-2">
+         <button id="btnAdmin"
+           class="text-xs text-gray-400 hover:text-gray-600 underline">
+           Acceso admin
+         </button>
+       </div>`;
 
   document.getElementById("app").innerHTML = `
-    <div class="mb-8">
-      <h1 class="text-2xl font-bold text-blue-700 mb-1">Control Completitud Mercado</h1>
-      <p class="text-gray-500 text-sm">Registra y monitorea las rutinas de disponibilidad por local y turno</p>
+    <div class="mb-6 flex items-start justify-between">
+      <div>
+        <h1 class="text-2xl font-bold text-blue-700 mb-1">Control Completitud Mercado</h1>
+        <p class="text-gray-500 text-sm">Registra y monitorea las rutinas de disponibilidad por local y turno</p>
+      </div>
     </div>
     <div class="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-8">
       <a href="#nuevo"   class="card-btn bg-blue-600   text-white">+ Nuevo Check</a>
       <a href="#resumen" class="card-btn bg-indigo-600 text-white">Resumen</a>
       <a href="#config"  class="card-btn bg-gray-700   text-white">Configuracion</a>
     </div>
+    ${adminBar}
     <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
       <div class="px-4 py-3 border-b bg-gray-50 font-semibold text-gray-700">Ultimos registros</div>
       <div class="overflow-x-auto">
@@ -100,12 +196,26 @@ async function home() {
               <th class="px-4 py-2 text-left">Seccion / Turno</th>
               <th class="px-4 py-2 text-left">Responsable</th>
               <th class="px-4 py-2 text-left">Estado</th>
+              ${admin ? `<th class="px-4 py-2 text-left">Accion</th>` : ""}
             </tr>
           </thead>
           <tbody>${rows}</tbody>
         </table>
       </div>
     </div>`;
+
+  // Boton admin / salir admin
+  document.getElementById("btnAdmin")?.addEventListener("click", () =>
+    showAdminModal(() => home()));
+  document.getElementById("btnSalirAdmin")?.addEventListener("click", () => {
+    sessionStorage.removeItem("cfg_auth");
+    home();
+  });
+
+  // Botones eliminar (solo admin)
+  document.querySelectorAll(".btn-del").forEach(btn => {
+    btn.addEventListener("click", () => deleteSubmission(btn.dataset.id));
+  });
 }
 
 // ── NUEVO ──────────────────────────────────────────────────────────────────────
