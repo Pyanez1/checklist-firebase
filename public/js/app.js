@@ -253,6 +253,9 @@ async function editar(id) {
             data-id="${item.id}" placeholder="Comentarios opcionales...">${r.observaciones || ""}</textarea>
         </div>
         <div id="saved-${item.id}" class="text-right text-xs text-green-600 hidden">Guardado</div>
+        <div id="obs-err-${item.id}" class="hidden text-xs text-red-600 font-medium">
+          Observacion requerida antes de enviar.
+        </div>
       </div>`;
   }).join("");
 
@@ -271,6 +274,9 @@ async function editar(id) {
           : ""}
       </div>
     </div>
+    <div id="errEnviar" class="hidden mb-3 bg-red-50 border border-red-300 text-red-700 text-sm font-medium px-4 py-3 rounded-lg">
+      Completa las <strong>observaciones</strong> de todos los items antes de enviar.
+    </div>
     <div class="space-y-4">${cards}</div>`;
 
   document.querySelectorAll(".chk-cumple").forEach(el => {
@@ -284,7 +290,28 @@ async function editar(id) {
     });
   });
   document.getElementById("btnEnviar")?.addEventListener("click", async () => {
-    await updateDoc(doc(db, "submissions", id), { estado:"enviado", updated_at:serverTimestamp() });
+    // Validar observaciones completas en todos los items
+    let hayVacias = false;
+    document.querySelectorAll(".obs-field").forEach(el => {
+      const vacia = !el.value.trim();
+      el.classList.toggle("ring-2",     vacia);
+      el.classList.toggle("ring-red-500", vacia);
+      const errEl = document.getElementById(`obs-err-${el.dataset.id}`);
+      if (errEl) errEl.classList.toggle("hidden", !vacia);
+      if (vacia) hayVacias = true;
+    });
+    if (hayVacias) {
+      document.getElementById("errEnviar").classList.remove("hidden");
+      document.querySelector(".ring-red-500")?.scrollIntoView({ behavior:"smooth", block:"center" });
+      return;
+    }
+    document.getElementById("errEnviar").classList.add("hidden");
+    // Calcular % de cumplimiento
+    const chks = [...document.querySelectorAll(".chk-cumple")];
+    const pct  = chks.length ? Math.round(chks.filter(c => c.checked).length / chks.length * 100) : 0;
+    await updateDoc(doc(db, "submissions", id), {
+      estado: "enviado", pct_cumplimiento: pct, updated_at: serverTimestamp()
+    });
     location.hash = "home";
   });
 }
@@ -303,7 +330,7 @@ async function saveItem(subId, itemId) {
   setTimeout(() => el.classList.add("hidden"), 2000);
 }
 
-// ── RESUMEN ────────────────────────────────────────────────────────────────────
+// ── RESUMEN DASHBOARD ─────────────────────────────────────────────────────────
 async function resumen() {
   let allDocs = [];
   try {
@@ -315,62 +342,145 @@ async function resumen() {
       .sort((a,b) => (b.fecha||"").localeCompare(a.fecha||""));
   }
 
-  const porLocal = {};
-  allDocs.forEach(s => {
-    if (!porLocal[s.local]) porLocal[s.local] = { total:0, enviados:0, ultima:"" };
-    const g = porLocal[s.local];
+  // Acumular métricas por sección y local ──────────────────────────────────────
+  const SECS = ["SALA", "BODEGA"];
+  const stats = {};
+  SECS.forEach(s => { stats[s] = { total:0, enviados:0, pctSum:0, pctN:0, locales:{} }; });
+
+  allDocs.forEach(sub => {
+    const g = stats[sub.seccion];
+    if (!g) return;
     g.total++;
-    if (s.estado === "enviado") g.enviados++;
-    if (!g.ultima || s.fecha > g.ultima) g.ultima = s.fecha;
+    if (sub.estado === "enviado") g.enviados++;
+    if (sub.pct_cumplimiento != null) { g.pctSum += sub.pct_cumplimiento; g.pctN++; }
+
+    if (!g.locales[sub.local]) g.locales[sub.local] = { total:0, enviados:0, pctSum:0, pctN:0, ultima:"" };
+    const gl = g.locales[sub.local];
+    gl.total++;
+    if (sub.estado === "enviado") gl.enviados++;
+    if (sub.pct_cumplimiento != null) { gl.pctSum += sub.pct_cumplimiento; gl.pctN++; }
+    if (!gl.ultima || sub.fecha > gl.ultima) gl.ultima = sub.fecha;
   });
 
-  const sumRows = Object.entries(porLocal).sort((a,b)=>Number(a[0])-Number(b[0])).map(([local, g]) => `
-    <tr class="hover:bg-gray-50">
-      <td class="px-4 py-3 font-bold text-blue-700">Local ${local}</td>
-      <td class="px-4 py-3 text-center">${g.total}</td>
-      <td class="px-4 py-3 text-center text-green-700 font-semibold">${g.enviados}</td>
-      <td class="px-4 py-3 text-center text-yellow-700">${g.total - g.enviados}</td>
-      <td class="px-4 py-3 text-center">${g.ultima || "&mdash;"}</td>
-    </tr>`).join("") || `<tr><td colspan="5" class="text-center py-8 text-gray-400">Sin datos</td></tr>`;
+  // Helpers de presentación ───────────────────────────────────────────────────
+  const pctOf  = (g)  => g.pctN ? Math.round(g.pctSum / g.pctN) : null;
+  const barCls = (p)  => p == null ? "bg-gray-300" : p >= 80 ? "bg-green-500" : p >= 60 ? "bg-yellow-400" : "bg-red-500";
+  const txtCls = (p)  => p == null ? "text-gray-400" : p >= 80 ? "text-green-700" : p >= 60 ? "text-yellow-600" : "text-red-600";
 
-  const detRows = allDocs.slice(0, 50).map(s => `
-    <tr class="hover:bg-gray-50 cursor-pointer" onclick="location.hash='editar/${s.id}'">
+  // Panel por sección (SALA / BODEGA) ─────────────────────────────────────────
+  const secPanel = (sec) => {
+    const g   = stats[sec];
+    const pct = pctOf(g);
+    const lbl = pct != null ? `${pct}%` : "Sin datos";
+    return `
+      <div class="bg-white rounded-xl shadow-sm border p-5">
+        <p class="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3">${sec}</p>
+        <div class="flex items-end gap-2 mb-2">
+          <span class="text-5xl font-black ${txtCls(pct)}">${lbl}</span>
+          <span class="text-sm text-gray-400 mb-1">cumplimiento</span>
+        </div>
+        <div class="h-3 bg-gray-100 rounded-full mb-4">
+          <div class="${barCls(pct)} h-3 rounded-full" style="width:${pct||0}%"></div>
+        </div>
+        <div class="grid grid-cols-3 gap-2 text-center">
+          <div class="bg-gray-50 rounded-lg py-2">
+            <div class="text-lg font-bold text-gray-700">${g.total}</div>
+            <div class="text-xs text-gray-400">Total</div>
+          </div>
+          <div class="bg-green-50 rounded-lg py-2">
+            <div class="text-lg font-bold text-green-700">${g.enviados}</div>
+            <div class="text-xs text-gray-400">Enviados</div>
+          </div>
+          <div class="bg-yellow-50 rounded-lg py-2">
+            <div class="text-lg font-bold text-yellow-600">${g.total - g.enviados}</div>
+            <div class="text-xs text-gray-400">Borrador</div>
+          </div>
+        </div>
+      </div>`;
+  };
+
+  // Tabla por local de cada sección ───────────────────────────────────────────
+  const localTable = (sec) => {
+    const entries = Object.entries(stats[sec].locales)
+      .sort((a,b) => Number(a[0]) - Number(b[0]));
+    if (!entries.length)
+      return `<p class="text-sm text-gray-400 px-4 py-4">Sin registros.</p>`;
+    return `
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 text-xs text-gray-500">
+          <tr>
+            <th class="px-3 py-2 text-left">Local</th>
+            <th class="px-3 py-2 text-left">Cumplimiento</th>
+            <th class="px-3 py-2 text-center">Enviados</th>
+            <th class="px-3 py-2 text-center">Borrador</th>
+            <th class="px-3 py-2 text-center">Ultima fecha</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${entries.map(([local, gl]) => {
+            const p = pctOf(gl);
+            const bar = p != null
+              ? `<div class="flex items-center gap-2">
+                   <div class="flex-1 h-2 bg-gray-100 rounded-full">
+                     <div class="${barCls(p)} h-2 rounded-full" style="width:${p}%"></div>
+                   </div>
+                   <span class="text-xs font-bold w-9 text-right ${txtCls(p)}">${p}%</span>
+                 </div>`
+              : `<span class="text-xs text-gray-400">Sin dato</span>`;
+            return `<tr class="border-t hover:bg-gray-50">
+              <td class="px-3 py-2 font-bold text-blue-700">Local ${local}</td>
+              <td class="px-3 py-2 w-44">${bar}</td>
+              <td class="px-3 py-2 text-center font-semibold text-green-700">${gl.enviados}</td>
+              <td class="px-3 py-2 text-center text-yellow-600">${gl.total - gl.enviados}</td>
+              <td class="px-3 py-2 text-center text-gray-500 text-xs">${gl.ultima || "&mdash;"}</td>
+            </tr>`;
+          }).join("")}
+        </tbody>
+      </table>`;
+  };
+
+  // Tabla detalle ─────────────────────────────────────────────────────────────
+  const detRows = allDocs.slice(0, 50).map(s => {
+    const p = s.pct_cumplimiento;
+    return `
+    <tr class="border-t hover:bg-gray-50 cursor-pointer" onclick="location.hash='editar/${s.id}'">
       <td class="px-3 py-2 font-medium text-blue-700">Local ${s.local}</td>
-      <td class="px-3 py-2">${s.fecha}</td>
+      <td class="px-3 py-2 text-xs">${s.fecha}</td>
       <td class="px-3 py-2">${s.seccion}</td>
       <td class="px-3 py-2">${s.turno}</td>
       <td class="px-3 py-2">${s.responsable || "&mdash;"}</td>
+      <td class="px-3 py-2 text-center font-semibold ${txtCls(p ?? null)}">${p != null ? p+"%" : "&mdash;"}</td>
       <td class="px-3 py-2">${badge(s.estado)}</td>
-    </tr>`).join("");
+    </tr>`;
+  }).join("");
 
   document.getElementById("app").innerHTML = `
-    ${nav("Resumen por Local")}
+    ${nav("Dashboard de Cumplimiento")}
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+      ${secPanel("SALA")}
+      ${secPanel("BODEGA")}
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border overflow-hidden mb-4">
+      <div class="px-4 py-3 bg-blue-50 border-b font-semibold text-blue-800">Cumplimiento por Local &mdash; SALA</div>
+      ${localTable("SALA")}
+    </div>
     <div class="bg-white rounded-xl shadow-sm border overflow-hidden mb-6">
-      <div class="px-4 py-3 bg-indigo-50 border-b font-semibold text-indigo-800">Consolidado por Local</div>
-      <div class="overflow-x-auto">
-        <table class="w-full text-sm">
-          <thead class="bg-gray-50 text-gray-600">
-            <tr>
-              <th class="px-4 py-2 text-left">Local</th>
-              <th class="px-4 py-2 text-center">Total</th>
-              <th class="px-4 py-2 text-center">Enviados</th>
-              <th class="px-4 py-2 text-center">Borradores</th>
-              <th class="px-4 py-2 text-center">Ultima fecha</th>
-            </tr>
-          </thead>
-          <tbody>${sumRows}</tbody>
-        </table>
-      </div>
+      <div class="px-4 py-3 bg-indigo-50 border-b font-semibold text-indigo-800">Cumplimiento por Local &mdash; BODEGA</div>
+      ${localTable("BODEGA")}
     </div>
     <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
       <div class="px-4 py-3 bg-gray-50 border-b font-semibold text-gray-700">Detalle (ultimos 50)</div>
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
-          <thead class="bg-gray-50 text-gray-600">
+          <thead class="bg-gray-50 text-gray-500 text-xs">
             <tr>
-              <th class="px-3 py-2 text-left">Local</th><th class="px-3 py-2 text-left">Fecha</th>
-              <th class="px-3 py-2 text-left">Seccion</th><th class="px-3 py-2 text-left">Turno</th>
-              <th class="px-3 py-2 text-left">Responsable</th><th class="px-3 py-2 text-left">Estado</th>
+              <th class="px-3 py-2 text-left">Local</th>
+              <th class="px-3 py-2 text-left">Fecha</th>
+              <th class="px-3 py-2 text-left">Seccion</th>
+              <th class="px-3 py-2 text-left">Turno</th>
+              <th class="px-3 py-2 text-left">Responsable</th>
+              <th class="px-3 py-2 text-center">Cumplimiento</th>
+              <th class="px-3 py-2 text-left">Estado</th>
             </tr>
           </thead>
           <tbody>${detRows}</tbody>
