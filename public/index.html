@@ -6,10 +6,24 @@
   <title>Control Completitud Mercado</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    .card-btn { @apply flex items-center justify-center p-4 rounded-xl font-semibold text-sm shadow-sm hover:opacity-90 transition text-center; }
-    .input    { @apply w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 focus:outline-none; }
-    .input-sm { @apply border border-gray-300 rounded-lg px-2 py-1 text-xs focus:ring-1 focus:ring-blue-400 focus:outline-none w-full; }
-    .label    { @apply block text-sm font-medium text-gray-700 mb-1; }
+    .card-btn {
+      display:flex; align-items:center; justify-content:center;
+      padding:1rem; border-radius:0.75rem; font-weight:600;
+      font-size:0.875rem; box-shadow:0 1px 2px rgba(0,0,0,.05);
+      transition:opacity .15s; text-align:center;
+    }
+    .card-btn:hover { opacity:.88; }
+    .input {
+      width:100%; border:1px solid #d1d5db; border-radius:0.5rem;
+      padding:0.5rem 0.75rem; font-size:0.875rem; outline:none;
+    }
+    .input:focus { box-shadow:0 0 0 2px #93c5fd; border-color:#60a5fa; }
+    .input-sm {
+      width:100%; border:1px solid #d1d5db; border-radius:0.5rem;
+      padding:0.25rem 0.5rem; font-size:0.75rem; outline:none;
+    }
+    .input-sm:focus { box-shadow:0 0 0 1px #93c5fd; }
+    .label { display:block; font-size:0.875rem; font-weight:500; color:#374151; margin-bottom:0.25rem; }
   </style>
 </head>
 <body class="bg-gray-100 min-h-screen">
@@ -18,12 +32,11 @@
   <header class="bg-blue-700 text-white shadow-md">
     <div class="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
       <a href="#home" class="flex items-center gap-2 font-bold text-lg hover:opacity-90">
-        <span>🛒</span>
-        <span class="hidden sm:inline">Completitud Mercado</span>
-        <span class="sm:hidden">Completitud</span>
+        <span>&#128722;</span>
+        <span>Completitud Mercado</span>
       </a>
       <nav class="flex gap-4 text-sm font-medium">
-        <a href="#nuevo"   class="hover:text-yellow-300 transition">＋ Nuevo</a>
+        <a href="#nuevo"   class="hover:text-yellow-300 transition">+ Nuevo</a>
         <a href="#resumen" class="hover:text-yellow-300 transition">Resumen</a>
         <a href="#config"  class="hover:text-yellow-300 transition">Config</a>
       </nav>
@@ -42,4 +55,3 @@
   <script type="module" src="js/app.js"></script>
 </body>
 </html>
-  

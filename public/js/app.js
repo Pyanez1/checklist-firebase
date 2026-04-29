@@ -24,7 +24,17 @@ async function router() {
   const [page, ...rest] = hash.split("/");
   const fn = routes[page] || home;
   document.getElementById("app").innerHTML = '<div class="flex justify-center py-16"><div class="animate-spin h-8 w-8 border-4 border-blue-600 border-t-transparent rounded-full"></div></div>';
-  await fn(rest.join("/"));
+  try {
+    await fn(rest.join("/"));
+  } catch(err) {
+    console.error(err);
+    document.getElementById("app").innerHTML = `
+      <div class="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
+        <p class="text-red-700 font-semibold mb-2">Error al cargar</p>
+        <p class="text-red-500 text-sm">${err.message}</p>
+        <a href="#home" class="mt-4 inline-block text-blue-600 underline text-sm">Volver al inicio</a>
+      </div>`;
+  }
 }
 window.addEventListener("hashchange", router);
 window.addEventListener("load",       router);
@@ -47,9 +57,18 @@ function badge(estado) {
 
 // ── HOME ──────────────────────────────────────────────────────────────────────
 async function home() {
-  const q   = query(collection(db, "submissions"), orderBy("created_at", "desc"));
-  const snp = await getDocs(q);
-  const rows = snp.docs.slice(0, 8).map(d => {
+  // Sin orderBy para evitar necesidad de índice compuesto
+  let snpDocs = [];
+  try {
+    const q   = query(collection(db, "submissions"), orderBy("created_at", "desc"));
+    const snp = await getDocs(q);
+    snpDocs   = snp.docs;
+  } catch(_) {
+    // Fallback sin orden si no existe el índice aún
+    const snp = await getDocs(collection(db, "submissions"));
+    snpDocs   = snp.docs;
+  }
+  const rows = snpDocs.slice(0, 8).map(d => {
     const s = d.data();
     return `<tr class="hover:bg-gray-50 cursor-pointer" onclick="location.hash='editar/${d.id}'">
       <td class="px-4 py-3 font-medium">Local ${s.local}</td>
