@@ -77,7 +77,7 @@ const barCls = p  => p == null ? "bg-gray-300" : p >= 80 ? "bg-green-500" : p >=
 const txtCls = p  => p == null ? "text-gray-400" : p >= 80 ? "text-green-700" : p >= 60 ? "text-yellow-600" : "text-red-600";
 const badge  = st => st === "enviado"
   ? `<span class="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-800 font-medium">enviado</span>`
-  : `<span class="text-xs px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800 font-medium">borrador</span>`;
+  : `<span class="text-xs px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800 font-medium">avance</span>`;
 
 function destroyChart(id) {
   const existing = window.Chart?.getChart(id);

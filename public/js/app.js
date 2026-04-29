@@ -159,7 +159,7 @@ async function nuevo() {
         seccion:     sec,
         turno:       tur,
         responsable: fd.get("responsable"),
-        estado:      "borrador",
+        estado:      "avance",
         created_at:  serverTimestamp(),
         updated_at:  serverTimestamp(),
       });
@@ -376,6 +376,14 @@ async function saveItem(subId, itemId) {
   const obs        = card.querySelector(".obs-field").value || "";
   await setDoc(doc(db, "submissions", subId, "responses", itemId),
     { cumple, detectados, gestionados, pendientes, observaciones: obs });
+
+  // Actualizar adherencia parcial en el doc padre para que Resumen la muestre en tiempo real
+  const allChks = [...document.querySelectorAll(".chk-cumple")];
+  const pctActual = allChks.length
+    ? Math.round(allChks.filter(c => c.checked).length / allChks.length * 100)
+    : 0;
+  await updateDoc(doc(db, "submissions", subId), { pct_cumplimiento: pctActual });
+
   const el = document.getElementById(`saved-${itemId}`);
   el.classList.remove("hidden");
   setTimeout(() => el.classList.add("hidden"), 2000);

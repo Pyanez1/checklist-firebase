@@ -10,10 +10,11 @@ export function nav(title) {
 }
 
 export function badge(estado) {
-  const cls = estado === "enviado"
-    ? "bg-green-100 text-green-800"
-    : "bg-yellow-100 text-yellow-800";
-  return `<span class="text-xs px-2 py-0.5 rounded-full font-medium ${cls}">${estado}</span>`;
+  if (estado === "enviado") {
+    return `<span class="text-xs px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-800">enviado</span>`;
+  }
+  // "avance" + retrocompat con registros viejos "borrador"
+  return `<span class="text-xs px-2 py-0.5 rounded-full font-medium bg-yellow-100 text-yellow-800">avance</span>`;
 }
 
 export const statCard = (label, val, cls = "text-gray-800") => `
