@@ -4,9 +4,14 @@ import { collection, getDocs, query, orderBy }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { LOCALES } from "./data.js";
 
-const BLUE   = "#0053e2"; // Walmart blue
-const SPARK  = "#ffc220"; // Walmart spark
-const SECS   = ["SALA", "BODEGA"];
+const BLUE  = "#0053e2";
+const SPARK = "#ffc220";
+const SECS  = ["SALA", "BODEGA"];
+
+// ─ Estado de filtro de fecha ───────────────────────────────────────────────
+let _filterFrom = "";
+let _filterTo   = "";
+let _allDocs    = null; // cache
 
 function tabBtnCls(active) {
   return active
@@ -14,23 +19,33 @@ function tabBtnCls(active) {
     : "res-tab px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-700 border-b-2 border-transparent";
 }
 
-// ── Carga y agrega datos ───────────────────────────────────────────────────────
-async function loadStats() {
-  let docs = [];
+// ─ Carga docs (una sola vez) y computa stats con filtro activo ────────────────
+async function loadAllDocs() {
+  if (_allDocs) return _allDocs;
   try {
     const q = query(collection(db, "submissions"), orderBy("fecha", "desc"));
-    docs = (await getDocs(q)).docs.map(d => ({ id: d.id, ...d.data() }));
+    _allDocs = (await getDocs(q)).docs.map(d => ({ id: d.id, ...d.data() }));
   } catch (_) {
-    docs = (await getDocs(collection(db, "submissions"))).docs
+    _allDocs = (await getDocs(collection(db, "submissions"))).docs
       .map(d => ({ id: d.id, ...d.data() }))
       .sort((a, b) => (b.fecha || "").localeCompare(a.fecha || ""));
   }
+  return _allDocs;
+}
 
+function applyFilter(docs) {
+  return docs.filter(d => {
+    if (_filterFrom && d.fecha < _filterFrom) return false;
+    if (_filterTo   && d.fecha > _filterTo)   return false;
+    return true;
+  });
+}
+
+function computeStats(docs) {
   const stats = {};
   SECS.forEach(s => {
     stats[s] = { total: 0, enviados: 0, pctSum: 0, pctN: 0, locales: {} };
   });
-
   docs.forEach(sub => {
     const g = stats[sub.seccion];
     if (!g) return;
@@ -46,7 +61,13 @@ async function loadStats() {
     if (!gl.ultima || sub.fecha > gl.ultima) gl.ultima = sub.fecha;
     gl.rows.push(sub);
   });
-  return { stats, docs };
+  return stats;
+}
+
+async function loadStats() {
+  const all      = await loadAllDocs();
+  const filtered = applyFilter(all);
+  return { stats: computeStats(filtered), docs: filtered, allDocs: all };
 }
 
 // ── Helpers visuales ───────────────────────────────────────────────────────────
@@ -62,12 +83,13 @@ function destroyChart(id) {
   if (existing) existing.destroy();
 }
 
-// ── ENTRY POINT ────────────────────────────────────────────────────────────────
+// ── ENTRY POINT ──────────────────────────────────────────────────────────────
 export async function resumen() {
+  _allDocs = null; // forzar recarga al navegar
   const { stats, docs } = await loadStats();
   renderShell();
   bindTabs(stats, docs);
-  renderTabResumen(stats);
+  renderTabResumen(stats, docs);
 }
 
 function renderShell() {
@@ -75,12 +97,43 @@ function renderShell() {
     { id: "dashboard", label: "Resumen" },
     { id: "desempeno", label: "Desempeno por Local" },
   ];
+  const filterLabel = (_filterFrom || _filterTo)
+    ? `<span class="ml-2 text-xs text-blue-600 font-semibold">Filtro activo</span>` : "";
+
   document.getElementById("app").innerHTML = `
     <div class="flex items-center gap-3 mb-4">
       <a href="#home" class="text-blue-600 hover:underline text-sm">&larr; Inicio</a>
-      <span class="text-gray-400">/</span>
+      <span class="text-gray-300">/</span>
       <h1 class="text-xl font-bold text-gray-800">Resumen</h1>
     </div>
+
+    <!-- Filtro de fecha -->
+    <div class="bg-white border border-gray-200 rounded-xl px-4 py-3 mb-5
+                flex flex-wrap gap-3 items-end shadow-sm">
+      <div>
+        <label class="label text-xs">Desde</label>
+        <input type="date" id="filterFrom" value="${_filterFrom}"
+          class="input text-sm" style="width:140px">
+      </div>
+      <div>
+        <label class="label text-xs">Hasta</label>
+        <input type="date" id="filterTo" value="${_filterTo}"
+          class="input text-sm" style="width:140px">
+      </div>
+      <button id="btnFiltrar"
+        class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+        Aplicar filtro
+      </button>
+      ${(_filterFrom || _filterTo)
+        ? `<button id="btnLimpiar"
+             class="px-4 py-2 rounded-lg text-sm text-gray-500 hover:text-gray-700
+                    border border-gray-300 hover:bg-gray-50">
+             Limpiar
+           </button>` : ""}
+      ${filterLabel}
+    </div>
+
+    <!-- Tabs -->
     <div class="flex gap-1 mb-6 border-b">
       ${tabs.map((t, i) => `
         <button class="${tabBtnCls(i === 0)}" data-tab="${t.id}">${t.label}</button>
@@ -90,18 +143,51 @@ function renderShell() {
 }
 
 function bindTabs(stats, docs) {
+  let activeTab = "dashboard";
+
+  // Filtro de fecha
+  const applyDateFilter = async () => {
+    _filterFrom = document.getElementById("filterFrom")?.value || "";
+    _filterTo   = document.getElementById("filterTo")?.value   || "";
+    const { stats: s2, docs: d2 } = await loadStats();
+    renderShell();
+    bindTabs(s2, d2);
+    if (activeTab === "dashboard") renderTabResumen(s2, d2);
+    else                           renderTabDesempeno(s2, d2);
+  };
+  document.getElementById("btnFiltrar")?.addEventListener("click", applyDateFilter);
+  document.getElementById("filterFrom")?.addEventListener("keydown", e => e.key === "Enter" && applyDateFilter());
+  document.getElementById("filterTo")?.addEventListener("keydown",   e => e.key === "Enter" && applyDateFilter());
+  document.getElementById("btnLimpiar")?.addEventListener("click", async () => {
+    _filterFrom = _filterTo = "";
+    const { stats: s2, docs: d2 } = await loadStats();
+    renderShell();
+    bindTabs(s2, d2);
+    renderTabResumen(s2, d2);
+  });
+
+  // Tabs
   document.querySelectorAll(".res-tab").forEach(btn => {
     btn.addEventListener("click", () => {
+      activeTab = btn.dataset.tab;
       document.querySelectorAll(".res-tab").forEach(b => b.className = tabBtnCls(false));
       btn.className = tabBtnCls(true);
-      if (btn.dataset.tab === "dashboard") renderTabResumen(stats);
-      else                                 renderTabDesempeno(stats, docs);
+      if (activeTab === "dashboard") renderTabResumen(stats, docs);
+      else                           renderTabDesempeno(stats, docs);
     });
   });
 }
 
-// ── TAB 1: Resumen ─────────────────────────────────────────────────────────────
-function renderTabResumen(stats) {
+// ── TAB 1: Resumen ──────────────────────────────────────────────────────────────
+function renderTabResumen(stats, docs) {
+  const totalDocs = docs?.length ?? 0;
+  const periodoBanner = (_filterFrom || _filterTo)
+    ? `<div class="text-xs text-blue-600 bg-blue-50 border border-blue-100
+                  rounded-lg px-3 py-2 mb-4 font-medium">
+         Mostrando ${totalDocs} registro(s)
+         ${_filterFrom ? `desde <strong>${_filterFrom}</strong>` : ""}
+         ${_filterTo   ? `hasta <strong>${_filterTo}</strong>`   : ""}
+       </div>` : "";
   // Panel por sección
   const secPanel = sec => {
     const g = stats[sec], p = pctOf(g);
@@ -158,6 +244,7 @@ function renderTabResumen(stats) {
   }).join("") || `<tr><td colspan="4" class="text-center py-6 text-gray-400">Sin registros</td></tr>`;
 
   document.getElementById("resContent").innerHTML = `
+    ${periodoBanner}
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
       ${secPanel("SALA")}${secPanel("BODEGA")}
     </div>

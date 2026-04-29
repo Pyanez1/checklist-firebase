@@ -3,54 +3,90 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Control Completitud Mercado</title>
+  <title>Control Completitud Mercado — Walmart</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    .card-btn {
-      display:flex; align-items:center; justify-content:center;
-      padding:1rem; border-radius:0.75rem; font-weight:600;
-      font-size:0.875rem; box-shadow:0 1px 2px rgba(0,0,0,.05);
-      transition:opacity .15s; text-align:center;
-    }
-    .card-btn:hover { opacity:.88; }
-    .input {
-      width:100%; border:1px solid #d1d5db; border-radius:0.5rem;
-      padding:0.5rem 0.75rem; font-size:0.875rem; outline:none;
-    }
-    .input:focus { box-shadow:0 0 0 2px #93c5fd; border-color:#60a5fa; }
-    .input-sm {
-      width:100%; border:1px solid #d1d5db; border-radius:0.5rem;
-      padding:0.25rem 0.5rem; font-size:0.75rem; outline:none;
-    }
-    .input-sm:focus { box-shadow:0 0 0 1px #93c5fd; }
-    .label { display:block; font-size:0.875rem; font-weight:500; color:#374151; margin-bottom:0.25rem; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+
+    /* ── Header corporativo ── */
+    .wm-header  { background:#0053e2; border-bottom:3px solid #ffc220; }
+    .wm-logo-box{ background:#ffc220; color:#0053e2; font-weight:900;
+                  font-size:1.1rem; width:2rem; height:2rem; border-radius:.35rem;
+                  display:flex; align-items:center; justify-content:center; }
+
+    /* ── Navigation pills ── */
+    .nav-link { padding:.35rem .85rem; border-radius:.5rem; font-size:.8125rem;
+                font-weight:600; transition:background .15s; }
+    .nav-link:hover { background:rgba(255,255,255,.15); }
+
+    /* ── Stat cards ── */
+    .stat-card { background:white; border-radius:.85rem; border:1px solid #e5e7eb;
+                 padding:1.2rem 1rem; box-shadow:0 1px 4px rgba(0,0,0,.06);
+                 display:flex; flex-direction:column; gap:.25rem; }
+
+    /* ── Action cards ── */
+    .card-btn { display:flex; align-items:center; justify-content:center;
+                padding:.9rem; border-radius:.75rem; font-weight:700;
+                font-size:.875rem; box-shadow:0 2px 8px rgba(0,83,226,.18);
+                transition:all .15s; text-align:center; letter-spacing:.01em; }
+    .card-btn:hover { transform:translateY(-2px);
+                      box-shadow:0 6px 18px rgba(0,83,226,.28); }
+
+    /* ── Form inputs ── */
+    .input { width:100%; border:1.5px solid #d1d5db; border-radius:.5rem;
+             padding:.5rem .75rem; font-size:.875rem; outline:none; background:white; }
+    .input:focus { border-color:#0053e2; box-shadow:0 0 0 3px rgba(0,83,226,.12); }
+    .input-sm { width:100%; border:1px solid #d1d5db; border-radius:.5rem;
+                padding:.25rem .5rem; font-size:.75rem; outline:none; background:white; }
+    .input-sm:focus { border-color:#0053e2; box-shadow:0 0 0 2px rgba(0,83,226,.12); }
+    .label { display:block; font-size:.875rem; font-weight:600;
+             color:#374151; margin-bottom:.3rem; }
+
+    /* ── Panel section header ── */
+    .panel-hdr { background:linear-gradient(135deg,#0053e2,#003dab);
+                 color:white; padding:.6rem 1rem; font-weight:600;
+                 font-size:.875rem; border-radius:.75rem .75rem 0 0;
+                 display:flex; align-items:center; gap:.5rem; }
+
+    /* ── Scrollbar fino ── */
+    ::-webkit-scrollbar      { width:5px; height:5px; }
+    ::-webkit-scrollbar-thumb{ background:#c7d2fe; border-radius:4px; }
   </style>
 </head>
-<body class="bg-gray-100 min-h-screen">
+<body class="bg-slate-50 min-h-screen">
 
-  <!-- Navbar -->
-  <header class="bg-blue-700 text-white shadow-md">
-    <div class="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
-      <a href="#home" class="flex items-center gap-2 font-bold text-lg hover:opacity-90">
-        <span>&#128722;</span>
-        <span>Completitud Mercado</span>
+  <!-- ── Header corporativo ─────────────────────────────────────────── -->
+  <header class="wm-header text-white shadow-lg sticky top-0 z-40">
+    <div class="max-w-5xl mx-auto px-4 flex items-center justify-between py-2.5">
+      <a href="#home" class="flex items-center gap-2.5 hover:opacity-90 select-none">
+        <div class="wm-logo-box">&#9733;</div>
+        <div>
+          <p class="font-bold text-sm leading-tight">Completitud Mercado</p>
+          <p class="text-blue-200 text-xs leading-tight">Walmart Chile</p>
+        </div>
       </a>
-      <nav class="flex gap-4 text-sm font-medium">
-        <a href="#nuevo"   class="hover:text-yellow-300 transition">+ Nuevo</a>
-        <a href="#resumen" class="hover:text-yellow-300 transition">Resumen</a>
-        <a href="#config"  class="hover:text-yellow-300 transition">Config</a>
+      <nav class="flex gap-1 text-sm">
+        <a href="#nuevo"   class="nav-link">&#43; Nuevo</a>
+        <a href="#resumen" class="nav-link">Resumen</a>
+        <a href="#home"    class="nav-link">Inicio</a>
+        <a href="#config"  class="nav-link">Config</a>
       </nav>
     </div>
   </header>
 
-  <!-- Main -->
-  <main class="max-w-4xl mx-auto px-4 py-6">
+  <!-- ── Contenido principal ─────────────────────────────────────────── -->
+  <main class="max-w-5xl mx-auto px-4 py-6">
     <div id="app">
       <div class="flex justify-center py-16">
         <div class="animate-spin h-8 w-8 border-4 border-blue-600 border-t-transparent rounded-full"></div>
       </div>
     </div>
   </main>
+
+  <!-- ── Footer discreto ──────────────────────────────────────────────── -->
+  <footer class="border-t border-gray-200 mt-8 py-4 text-center text-xs text-gray-400">
+    Walmart Chile &nbsp;&middot;&nbsp; Control Completitud Mercado
+  </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
   <script type="module" src="js/app.js"></script>
