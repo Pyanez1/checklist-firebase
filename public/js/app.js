@@ -10,7 +10,7 @@ import { resumen } from "./resumen.js";
 const routes = { home, nuevo, editar, resumen, config: configuracion };
 
 async function router() {
-  const hash          = location.hash.slice(1) || "home";
+  const hash          = location.hash.slice(1) || "nuevo";
   const [page, ...rest] = hash.split("/");
   const fn            = routes[page] || home;
   document.getElementById("app").innerHTML =
@@ -126,7 +126,7 @@ async function nuevo() {
         </div>
         <div>
           <label class="label">Fecha</label>
-          <input type="date" name="fecha" value="${today}" required class="input">
+          <input type="date" name="fecha" value="${today}" min="${today}" required class="input">
         </div>
         <div>
           <label class="label">Seccion</label>
@@ -202,6 +202,14 @@ async function editar(id) {
   const saved = {};
   rSnap.forEach(d => { saved[d.id] = d.data(); });
 
+  // Cargar horario de la seccion/turno para mostrarlo en pantalla
+  let ventana = null;
+  try {
+    const cfgSnap = await getDoc(doc(db, "config", "time_restrictions"));
+    const rules   = cfgSnap.exists() ? cfgSnap.data().restrictions : DEFAULT_RESTRICTIONS;
+    ventana = rules.find(r => r.seccion === sub.seccion && r.turno === sub.turno) || null;
+  } catch(_) {}
+
   if (items.length === 0) {
     document.getElementById("app").innerHTML = `
       ${nav(`Local ${sub.local} &middot; ${sub.seccion} ${sub.turno} &middot; ${sub.fecha}`)}
@@ -261,9 +269,27 @@ async function editar(id) {
   }).join("");
 
   const isEnviado = sub.estado === "enviado";
+
+  // Banner de ventana horaria
+  const ventanaBanner = ventana
+    ? `<div class="flex items-center gap-2 text-xs rounded-lg px-3 py-2 mb-3 ${
+        ventana.activo
+          ? "bg-blue-50 border border-blue-100 text-blue-700"
+          : "bg-gray-50 border border-gray-200 text-gray-500"
+      }">
+        <span>&#9200;</span>
+        <span>Plazo de ingreso <strong>${sub.seccion} &ndash; ${sub.turno}:</strong>
+          ${ventana.activo
+            ? `<strong>${ventana.hora_inicio} &ndash; ${ventana.hora_fin}</strong>`
+            : "Sin restriccion horaria activa"
+          }
+        </span>
+      </div>`
+    : "";
+
   document.getElementById("app").innerHTML = `
     ${nav(`Local ${sub.local} &middot; ${sub.seccion} ${sub.turno} &middot; ${sub.fecha}`)}
-    <div class="flex justify-between items-center mb-4">
+    <div class="flex justify-between items-center mb-3">
       <div class="text-sm text-gray-500">Responsable: <strong>${sub.responsable || "&mdash;"}</strong></div>
       <div class="flex gap-2">
         ${badge(sub.estado)}
@@ -275,17 +301,45 @@ async function editar(id) {
           : ""}
       </div>
     </div>
+    ${ventanaBanner}
     <div id="errEnviar" class="hidden mb-3 bg-red-50 border border-red-300 text-red-700 text-sm font-medium px-4 py-3 rounded-lg">
       Completa las <strong>observaciones</strong> de todos los items antes de enviar.
     </div>
+    <!-- Barra de progreso sticky -->
+    <div class="sticky top-0 z-10 bg-white border-b shadow-sm -mx-4 px-4 py-3 mb-4">
+      <div class="flex justify-between items-center mb-1">
+        <span class="text-xs font-semibold text-gray-600">Avance de tareas</span>
+        <span id="progTxt" class="text-xs font-bold text-blue-700">0 / ${items.length} completadas</span>
+      </div>
+      <div class="h-2 bg-gray-100 rounded-full">
+        <div id="progBar" class="h-2 bg-blue-600 rounded-full transition-all duration-300" style="width:0%"></div>
+      </div>
+    </div>
     <div class="space-y-4">${cards}</div>`;
 
+  // Progreso inicial (items ya guardados)
+  function updateProgress() {
+    const fields = [...document.querySelectorAll(".obs-field")];
+    const done   = fields.filter(el => el.value.trim()).length;
+    const total  = fields.length;
+    const pct    = total ? Math.round(done / total * 100) : 0;
+    const txt    = document.getElementById("progTxt");
+    const bar    = document.getElementById("progBar");
+    if (txt) txt.textContent = `${done} / ${total} completadas`;
+    if (bar) {
+      bar.style.width  = `${pct}%`;
+      bar.className    = `h-2 rounded-full transition-all duration-300 ${pct === 100 ? "bg-green-500" : "bg-blue-600"}`;
+    }
+  }
+  updateProgress(); // estado inicial
+
   document.querySelectorAll(".chk-cumple").forEach(el => {
-    el.addEventListener("change", () => saveItem(id, el.dataset.id));
+    el.addEventListener("change", () => { saveItem(id, el.dataset.id); updateProgress(); });
   });
   let timers = {};
   document.querySelectorAll(".num-field, .obs-field").forEach(el => {
     el.addEventListener("input", () => {
+      updateProgress();
       clearTimeout(timers[el.dataset.id]);
       timers[el.dataset.id] = setTimeout(() => saveItem(id, el.dataset.id), 700);
     });
