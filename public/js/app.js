@@ -171,6 +171,32 @@ async function nuevo() {
   });
 }
 
+// ── Helpers de horario por ítem ─────────────────────────────────────────────
+function _parseHM(str) {
+  const [h, m] = str.trim().split(':').map(Number);
+  return h * 60 + (m || 0);
+}
+function _inWindow(s, e, now) {
+  return e >= s ? (now >= s && now <= e) : (now >= s || now <= e); // cruza medianoche
+}
+
+/** true si la hora actual está dentro del rango horario del ítem */
+function itemInHorario(horario) {
+  if (!horario) return true;
+  const now  = new Date();
+  const nowM = now.getHours() * 60 + now.getMinutes();
+  // Detecta separador: en-dash (–) o guion (-)  — evita partir en un solo dígito de tiempo
+  const enDash = horario.indexOf('\u2013');
+  const hyphen = horario.indexOf('-', 3); // ignora guion si es el 1er char (hora negativa)
+  const sep    = enDash > -1 ? '\u2013' : (hyphen > -1 ? '-' : null);
+  if (!sep) {
+    const s = _parseHM(horario);
+    return _inWindow(s, s + 60, nowM); // tiempo único → ventana de 60 min
+  }
+  const [a, b] = horario.split(sep);
+  return _inWindow(_parseHM(a), _parseHM(b), nowM);
+}
+
 // ── EDITAR ─────────────────────────────────────────────────────────────────────
 async function editar(id) {
   if (!id) { location.hash = "home"; return; }
@@ -204,9 +230,23 @@ async function editar(id) {
   }
 
   const cards = items.map(item => {
-    const r = saved[item.id] || {};
+    const r       = saved[item.id] || {};
+    const allowed = itemInHorario(item.horario);
+    const chkAttr = allowed ? "" : "disabled";
+    const chkCls  = allowed
+      ? "chk-cumple w-4 h-4 accent-blue-600 cursor-pointer"
+      : "chk-cumple w-4 h-4 cursor-not-allowed opacity-40";
+    const lockBadge = allowed ? "" : `
+      <div class="lock-badge flex items-center gap-1 mt-1.5 text-xs
+                  text-orange-700 bg-orange-50 border border-orange-200
+                  rounded-lg px-2 py-1 w-fit">
+        <span>&#128274;</span>
+        <span>Disponible&nbsp;<strong>${item.horario}</strong></span>
+      </div>`;
     return `
-      <div class="bg-white border rounded-xl p-4 shadow-sm space-y-3" id="card-${item.id}">
+      <div class="bg-white border rounded-xl p-4 shadow-sm space-y-3
+                  ${allowed ? "" : "opacity-75"}"
+           id="card-${item.id}" data-horario="${item.horario}">
         <div class="flex items-start justify-between gap-2">
           <div class="flex-1 min-w-0">
             <span class="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">${item.id}</span>
@@ -214,11 +254,12 @@ async function editar(id) {
             <h3 class="font-semibold text-gray-800 mt-1">${item.rutina}</h3>
             <p class="text-xs text-gray-500 mt-0.5">${item.accionable}</p>
             <p class="text-xs text-gray-400 mt-1">${item.responsable}</p>
+            ${lockBadge}
           </div>
-          <label class="flex-shrink-0 flex items-center gap-1 cursor-pointer">
-            <input type="checkbox" class="chk-cumple w-4 h-4 accent-blue-600"
-              data-id="${item.id}" ${r.cumple ? "checked" : ""}>
-            <span class="text-xs font-medium">Cumple</span>
+          <label class="flex-shrink-0 flex items-center gap-1 ${allowed ? "cursor-pointer" : "cursor-not-allowed"}">
+            <input type="checkbox" class="${chkCls}"
+              data-id="${item.id}" ${r.cumple ? "checked" : ""} ${chkAttr}>
+            <span class="text-xs font-medium ${allowed ? "" : "text-gray-400"}">Cumple</span>
           </label>
         </div>
         <div class="grid grid-cols-3 gap-2 text-xs">
@@ -328,6 +369,26 @@ async function editar(id) {
     }
   }
   updateProgress(); // estado inicial
+
+  // ── Refresh de locks cada 30 s ─────────────────────────────────────────────
+  function refreshLocks() {
+    document.querySelectorAll(".chk-cumple").forEach(chk => {
+      const card    = document.getElementById(`card-${chk.dataset.id}`);
+      if (!card) return;
+      const horario = card.dataset.horario;
+      const allowed = itemInHorario(horario);
+      chk.disabled  = !allowed;
+      chk.className = allowed
+        ? "chk-cumple w-4 h-4 accent-blue-600 cursor-pointer"
+        : "chk-cumple w-4 h-4 cursor-not-allowed opacity-40";
+      card.classList.toggle("opacity-75", !allowed);
+      const badge = card.querySelector(".lock-badge");
+      if (badge) badge.classList.toggle("hidden", allowed);
+    });
+  }
+  const _lockTimer = setInterval(refreshLocks, 30_000);
+  // limpia el timer al navegar fuera
+  window.addEventListener("hashchange", () => clearInterval(_lockTimer), { once: true });
 
   document.querySelectorAll(".chk-cumple").forEach(el => {
     el.addEventListener("change", () => { saveItem(id, el.dataset.id); updateProgress(); });
