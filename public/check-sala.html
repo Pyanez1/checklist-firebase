@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+  <title>Check Sala — WhatsApp</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    .task-row { transition: all .15s; }
+    .task-row.done { opacity: .55; }
+    .chk-tap {
+      width: 2.2rem; height: 2.2rem; border-radius: .5rem; border: 2px solid #d1d5db;
+      background: white; cursor: pointer; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.2rem; transition: all .15s; user-select: none;
+    }
+    .chk-tap.checked { background: #16a34a; border-color: #16a34a; }
+    .num-in {
+      width: 3.8rem; border: 1.5px solid #d1d5db; border-radius: .4rem;
+      padding: .2rem .35rem; font-size: .85rem; font-weight: 700;
+      text-align: center; background: white; outline: none;
+    }
+    .num-in:focus { border-color: #0053e2; box-shadow: 0 0 0 2px rgba(0,83,226,.15); }
+    #toast {
+      position: fixed; bottom: 5.5rem; left: 50%; transform: translateX(-50%) translateY(4rem);
+      background: #1f2937; color: white; padding: .6rem 1.4rem; border-radius: 2rem;
+      font-size: .85rem; font-weight: 600; opacity: 0; pointer-events: none;
+      transition: all .3s; z-index: 99; white-space: nowrap;
+    }
+    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  </style>
+</head>
+<body class="bg-slate-100 min-h-screen pb-32">
+
+  <!-- Header -->
+  <header style="background:#0053e2;border-bottom:3px solid #ffc220;" class="sticky top-0 z-20">
+    <div class="px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <div style="background:#ffc220;color:#0053e2;font-weight:900;width:2rem;height:2rem;
+                    border-radius:.4rem;display:flex;align-items:center;justify-content:center;">&#9733;</div>
+        <div>
+          <p class="font-black text-white text-sm leading-tight">Check Sala</p>
+          <p class="text-blue-200 text-xs" id="hdr-fecha">Cargando...</p>
+        </div>
+      </div>
+      <button onclick="resetAll()"
+        class="text-xs bg-white/20 hover:bg-white/30 text-white px-2.5 py-1.5 rounded-lg font-semibold">
+        &#8635; Reset
+      </button>
+    </div>
+  </header>
+
+  <div class="max-w-lg mx-auto px-3 pt-4 space-y-4">
+
+    <!-- ══ DATOS GENERALES ══════════════════════════════════════ -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+      <div class="bg-gray-700 text-white text-xs font-black px-4 py-2 flex items-center gap-2">
+        <span>&#128203;</span> Datos del Turno
+      </div>
+      <div class="p-4 space-y-3">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-xs font-semibold text-gray-500 block mb-1">Fecha</label>
+            <input type="date" id="g-fecha"
+              class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-semibold focus:outline-none focus:border-blue-500">
+          </div>
+          <div>
+            <label class="text-xs font-semibold text-gray-500 block mb-1">Tienda</label>
+            <select id="g-tienda"
+              class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-semibold bg-white focus:outline-none focus:border-blue-500">
+              <option>93 - Osorno</option>
+              <option>94 - Valdivia</option>
+              <option>96 - Temuco</option>
+              <option>99 - Puerto Montt</option>
+              <option>120 - Temuco</option>
+              <option>121 - Punta Arenas</option>
+              <option>456 - Temuco Barros</option>
+              <option>618 - Casona Osorno</option>
+              <option>670 - Cardonal PM</option>
+              <option>929 - La Paloma PM</option>
+            </select>
+          </div>
+        </div>
+        <!-- NSG y Alertas -->
+        <div class="flex flex-wrap items-center gap-4 pt-1">
+          <div class="flex items-center gap-2">
+            <label class="text-xs font-semibold text-gray-500">NSG</label>
+            <input type="number" id="g-nsg-num" min="0" placeholder="0" class="num-in">
+          </div>
+          <div class="flex items-center gap-2">
+            <label class="text-xs font-semibold text-gray-500">Alertas Total</label>
+            <input type="number" id="g-alertas" min="0" placeholder="0" class="num-in">
+          </div>
+          <div class="flex items-center gap-2 ml-auto">
+            <label class="text-xs font-semibold text-gray-500">Nuevo NSG</label>
+            <div class="chk-tap" id="g-nsg" onclick="toggleNSG(this)"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ TURNO AM ══════════════════════════════════════════════ -->
+    <div class="bg-white rounded-2xl shadow-sm border-l-4 border-blue-500 overflow-hidden">
+      <div class="bg-blue-700 text-white text-xs font-black px-4 py-2.5 flex items-center gap-2">
+        <span>&#9728;</span> CHECK SALA — TURNO AM
+      </div>
+      <div class="divide-y divide-gray-100">
+
+        <!-- 08:00 Reporte alertas -->
+        <div class="task-row p-3" id="row-am1">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="text-xs font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">08:00</span>
+            <span class="text-sm font-semibold text-gray-800">Extraer reporte de alertas</span>
+          </div>
+          <div class="flex items-center gap-4 pl-1">
+            <div class="flex items-center gap-1.5">
+              <span class="text-xs text-gray-500">Total alertas</span>
+              <input type="number" min="0" class="num-in" id="am1-a" placeholder="0">
+            </div>
+            <div class="ml-auto flex items-center gap-1.5">
+              <span class="text-xs text-gray-400">Listo</span>
+              <div class="chk-tap" id="chk-am1" onclick="toggleChk(this,'row-am1')"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 08:30 Gestionar alertas + picks -->
+        <div class="task-row p-3" id="row-am2">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="text-xs font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">08:30</span>
+            <span class="text-sm font-semibold text-gray-800">Gestionar alertas NSG y solicitar picks</span>
+          </div>
+          <div class="grid grid-cols-3 gap-2 pl-1 mb-2">
+            <div class="flex flex-col items-center gap-0.5">
+              <label class="text-xs font-bold text-blue-600">ACP</label>
+              <input type="number" min="0" class="num-in w-full" id="am2-acp" placeholder="0">
+            </div>
+            <div class="flex flex-col items-center gap-0.5">
+              <label class="text-xs font-bold text-yellow-600">GM</label>
+              <input type="number" min="0" class="num-in w-full" id="am2-gm" placeholder="0">
+            </div>
+            <div class="flex flex-col items-center gap-0.5">
+              <label class="text-xs font-bold text-rose-600">PPS</label>
+              <input type="number" min="0" class="num-in w-full" id="am2-pps" placeholder="0">
+            </div>
+          </div>
+          <div class="flex justify-end items-center gap-1.5">
+            <span class="text-xs text-gray-400">Listo</span>
+            <div class="chk-tap" id="chk-am2" onclick="toggleChk(this,'row-am2')"></div>
+          </div>
+        </div>
+
+        <!-- 10:20 F10 -->
+        <div class="task-row p-3 flex items-center gap-3" id="row-am3">
+          <div class="flex-1 flex items-center gap-2">
+            <span class="text-xs font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">10:20</span>
+            <span class="text-sm font-semibold text-gray-800">Validación inconsistencias F10</span>
+          </div>
+          <div class="chk-tap" id="chk-am3" onclick="toggleChk(this,'row-am3')"></div>
+        </div>
+
+        <!-- 11:00 Quiebres -->
+        <div class="task-row p-3 flex items-center gap-3" id="row-am4">
+          <div class="flex-1 flex items-center gap-2">
+            <span class="text-xs font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">11:00</span>
+            <span class="text-sm font-semibold text-gray-800">Quiebres repuestos en sala</span>
+          </div>
+          <div class="chk-tap" id="chk-am4" onclick="toggleChk(this,'row-am4')"></div>
+        </div>
+
+        <!-- 12:15 F10 -->
+        <div class="task-row p-3 flex items-center gap-3" id="row-am5">
+          <div class="flex-1 flex items-center gap-2">
+            <span class="text-xs font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">12:15</span>
+            <span class="text-sm font-semibold text-gray-800">Validación inconsistencias F10</span>
+          </div>
+          <div class="chk-tap" id="chk-am5" onclick="toggleChk(this,'row-am5')"></div>
+        </div>
+
+        <!-- 12:30 Entrega reportes -->
+        <div class="task-row p-3" id="row-am6">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="text-xs font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">12:30</span>
+            <span class="text-sm font-semibold text-gray-800">Entrega reportes y actualización alertas</span>
+          </div>
+          <div class="flex items-center gap-4 pl-1">
+            <div class="flex items-center gap-1.5">
+              <span class="text-xs text-gray-500">Alertas actualizadas</span>
+              <input type="number" min="0" class="num-in" id="am6-a" placeholder="0">
+            </div>
+            <div class="ml-auto flex items-center gap-1.5">
+              <span class="text-xs text-gray-400">Listo</span>
+              <div class="chk-tap" id="chk-am6" onclick="toggleChk(this,'row-am6')"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 13:00 Quiebres -->
+        <div class="task-row p-3 flex items-center gap-3" id="row-am7">
+          <div class="flex-1 flex items-center gap-2">
+            <span class="text-xs font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">13:00</span>
+            <span class="text-sm font-semibold text-gray-800">Quiebres repuestos en sala</span>
+          </div>
+          <div class="chk-tap" id="chk-am7" onclick="toggleChk(this,'row-am7')"></div>
+        </div>
+
+        <!-- 14:30 Reposición pick -->
+        <div class="task-row p-3 flex items-center gap-3" id="row-am8">
+          <div class="flex-1 flex items-center gap-2">
+            <span class="text-xs font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">14:30</span>
+            <span class="text-sm font-semibold text-gray-800">Reposición Pick y alertas NSG</span>
+          </div>
+          <div class="chk-tap" id="chk-am8" onclick="toggleChk(this,'row-am8')"></div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ══ TURNO PM ══════════════════════════════════════════════ -->
+    <div class="bg-white rounded-2xl shadow-sm border-l-4 border-indigo-500 overflow-hidden">
+      <div class="bg-indigo-700 text-white text-xs font-black px-4 py-2.5 flex items-center gap-2">
+        <span>&#9790;</span> CHECK SALA — TURNO PM
+      </div>
+      <div class="divide-y divide-gray-100">
+
+        <!-- 15:00-21:30 Gestión continua -->
+        <div class="task-row p-3 flex items-center gap-3 bg-indigo-50/40" id="row-pm1">
+          <div class="flex-1">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="text-xs font-black text-indigo-600 bg-indigo-100 px-2 py-0.5 rounded-full">15:00 – 21:30</span>
+              <span class="text-sm font-semibold text-gray-800">Verificar quiebres, gestionar reposición y devoluciones</span>
+            </div>
+          </div>
+          <div class="chk-tap ml-2" id="chk-pm1" onclick="toggleChk(this,'row-pm1')"></div>
+        </div>
+
+        <!-- 16:00 Alertas NSG + Pick -->
+        <div class="task-row p-3 flex items-center gap-3" id="row-pm2">
+          <div class="flex-1 flex items-center gap-2">
+            <span class="text-xs font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">16:00</span>
+            <span class="text-sm font-semibold text-gray-800">Gestionar alertas NSG · Solicitar Pick</span>
+          </div>
+          <div class="chk-tap" id="chk-pm2" onclick="toggleChk(this,'row-pm2')"></div>
+        </div>
+
+        <!-- 16:30 F10 -->
+        <div class="task-row p-3 flex items-center gap-3" id="row-pm3">
+          <div class="flex-1 flex items-center gap-2">
+            <span class="text-xs font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">16:30</span>
+            <span class="text-sm font-semibold text-gray-800">Validación inconsistencias F10</span>
+          </div>
+          <div class="chk-tap" id="chk-pm3" onclick="toggleChk(this,'row-pm3')"></div>
+        </div>
+
+        <!-- 17:00 Quiebres -->
+        <div class="task-row p-3 flex items-center gap-3" id="row-pm4">
+          <div class="flex-1 flex items-center gap-2">
+            <span class="text-xs font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">17:00</span>
+            <span class="text-sm font-semibold text-gray-800">Quiebres repuestos en sala</span>
+          </div>
+          <div class="chk-tap" id="chk-pm4" onclick="toggleChk(this,'row-pm4')"></div>
+        </div>
+
+        <!-- 19:30 F10 -->
+        <div class="task-row p-3 flex items-center gap-3" id="row-pm5">
+          <div class="flex-1 flex items-center gap-2">
+            <span class="text-xs font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">19:30</span>
+            <span class="text-sm font-semibold text-gray-800">Validación inconsistencias F10</span>
+          </div>
+          <div class="chk-tap" id="chk-pm5" onclick="toggleChk(this,'row-pm5')"></div>
+        </div>
+
+        <!-- 21:00 Entrega reporte nocturno -->
+        <div class="task-row p-3 flex items-center gap-3 bg-amber-50" id="row-pm6">
+          <div class="flex-1">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="text-xs font-black text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">📌 21:00</span>
+              <span class="text-sm font-bold text-amber-900">Entrega reporte ítems · Alertas NSG turno nocturno</span>
+            </div>
+          </div>
+          <div class="chk-tap ml-2" id="chk-pm6" onclick="toggleChk(this,'row-pm6')"></div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ══ PROGRESO ═══════════════════════════════════════════════ -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-4">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-sm font-bold text-gray-700">Progreso</span>
+        <span class="text-sm font-black text-blue-600" id="prog-txt">0 / 14</span>
+      </div>
+      <div class="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
+        <div id="prog-bar" class="h-3 rounded-full transition-all duration-500"
+          style="width:0%;background:linear-gradient(90deg,#0053e2,#22c55e)"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ══ BOTONES FIJOS ════════════════════════════════════════════ -->
+  <div class="fixed bottom-0 left-0 right-0 p-3 bg-white/90 backdrop-blur border-t border-gray-200 z-20">
+    <div class="max-w-lg mx-auto flex gap-2">
+      <button onclick="copiarMensaje()"
+        class="flex-1 flex items-center justify-center gap-2 bg-gray-100 hover:bg-gray-200
+               text-gray-700 font-bold text-sm py-3 rounded-xl transition-colors">
+        &#128203; Copiar
+      </button>
+      <button onclick="enviarWhatsApp()"
+        class="flex-1 flex items-center justify-center gap-2 font-bold text-sm py-3 rounded-xl
+               text-white transition-all active:scale-95"
+        style="background:#25D366;">
+        <svg viewBox="0 0 24 24" class="w-5 h-5 fill-white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+        Enviar WhatsApp
+      </button>
+    </div>
+  </div>
+
+  <div id="toast">✅ Copiado</div>
+
+  <script>
+    const STORE_KEY = 'check_sala_v1';
+    let nsgChecked = false;
+
+    const CHK_IDS = ['am1','am2','am3','am4','am5','am6','am7','am8',
+                     'pm1','pm2','pm3','pm4','pm5','pm6'];
+    const NUM_IDS = ['am1-a','am2-acp','am2-gm','am2-pps','am6-a',
+                     'g-nsg-num','g-alertas'];
+
+    function init() {
+      const today = new Date().toISOString().slice(0,10);
+      document.getElementById('g-fecha').value = today;
+      document.getElementById('hdr-fecha').textContent = fmtFecha(today);
+      document.getElementById('g-fecha').addEventListener('change', e =>
+        document.getElementById('hdr-fecha').textContent = fmtFecha(e.target.value));
+      loadState();
+      updateProgress();
+    }
+
+    function fmtFecha(iso) {
+      if (!iso) return '';
+      const [y,m,d] = iso.split('-');
+      const meses=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+      return `${parseInt(d)} ${meses[parseInt(m)-1]} ${y}`;
+    }
+
+    function toggleChk(el, rowId) {
+      const done = el.classList.toggle('checked');
+      el.textContent = done ? '✓' : '';
+      document.getElementById(rowId)?.classList.toggle('done', done);
+      updateProgress(); saveState();
+    }
+
+    function toggleNSG(el) {
+      nsgChecked = !nsgChecked;
+      el.classList.toggle('checked', nsgChecked);
+      el.textContent = nsgChecked ? '✓' : '';
+      saveState();
+    }
+
+    function updateProgress() {
+      const done  = CHK_IDS.filter(id => document.getElementById('chk-'+id)?.classList.contains('checked')).length;
+      const total = CHK_IDS.length;
+      document.getElementById('prog-txt').textContent = `${done} / ${total}`;
+      document.getElementById('prog-bar').style.width = `${Math.round(done/total*100)}%`;
+    }
+
+    function n(id) { return document.getElementById(id)?.value || '—'; }
+    function chk(id) { return document.getElementById('chk-'+id)?.classList.contains('checked') ? '✅' : '⬜'; }
+
+    function buildMsg() {
+      const fecha  = fmtFecha(document.getElementById('g-fecha').value);
+      const tienda = document.getElementById('g-tienda').value;
+      const nsg    = nsgChecked ? '✅' : '⬜';
+      return `*🛒 CHECK SALA — ${tienda}*
+📅 ${fecha}
+
+📊 NSG: *${n('g-nsg-num')}* | Alertas Total: *${n('g-alertas')}*
+${nsg} Nuevo NSG
+
+*☀️ TURNO AM*
+${chk('am1')} 08:00 Reporte alertas — Total: *${n('am1-a')}*
+${chk('am2')} 08:30 Alertas NSG y picks — ACP: *${n('am2-acp')}* | GM: *${n('am2-gm')}* | PPS: *${n('am2-pps')}*
+${chk('am3')} 10:20 Validación incons F10
+${chk('am4')} 11:00 Quiebres repuestos en sala
+${chk('am5')} 12:15 Validación incons F10
+${chk('am6')} 12:30 Entrega reportes · Alertas actualizadas: *${n('am6-a')}*
+${chk('am7')} 13:00 Quiebres repuestos en sala
+${chk('am8')} 14:30 Reposición Pick y alertas NSG
+
+*🌙 TURNO PM*
+${chk('pm1')} 15:00–21:30 Verificar quiebres · Reposición y devoluciones
+${chk('pm2')} 16:00 Gestionar alertas NSG · Solicitar Pick
+${chk('pm3')} 16:30 Validación incons F10
+${chk('pm4')} 17:00 Quiebres repuestos en sala
+${chk('pm5')} 19:30 Validación incons F10
+${chk('pm6')} 📌 21:00 Entrega reporte ítems · Alertas NSG turno nocturno
+
+_Walmart Chile — Check Sala_`;
+    }
+
+    function copiarMensaje() {
+      navigator.clipboard.writeText(buildMsg()).then(() => showToast('✅ Copiado'));
+    }
+    function enviarWhatsApp() {
+      window.open(`https://wa.me/?text=${encodeURIComponent(buildMsg())}`, '_blank');
+    }
+
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 2500);
+    }
+
+    function saveState() {
+      const state = {
+        fecha:  document.getElementById('g-fecha').value,
+        tienda: document.getElementById('g-tienda').value,
+        nsg:    nsgChecked,
+        checks: Object.fromEntries(CHK_IDS.map(id => [id, document.getElementById('chk-'+id)?.classList.contains('checked')])),
+        nums:   Object.fromEntries(NUM_IDS.map(id => [id, document.getElementById(id)?.value || ''])),
+      };
+      localStorage.setItem(STORE_KEY, JSON.stringify(state));
+    }
+
+    function loadState() {
+      const raw = localStorage.getItem(STORE_KEY);
+      if (!raw) return;
+      try {
+        const s = JSON.parse(raw);
+        if (s.fecha)  { document.getElementById('g-fecha').value = s.fecha; document.getElementById('hdr-fecha').textContent = fmtFecha(s.fecha); }
+        if (s.tienda) document.getElementById('g-tienda').value = s.tienda;
+        if (s.nsg)    { nsgChecked = false; toggleNSG(document.getElementById('g-nsg')); }
+        Object.entries(s.checks||{}).forEach(([id,val]) => {
+          if (val) { const el = document.getElementById('chk-'+id); if (el) { el.classList.add('checked'); el.textContent='✓'; document.getElementById('row-'+id)?.classList.add('done'); } }
+        });
+        Object.entries(s.nums||{}).forEach(([id,val]) => { const el = document.getElementById(id); if (el) el.value = val; });
+      } catch(e) {}
+    }
+
+    function resetAll() {
+      if (!confirm('¿Resetear el check de sala?')) return;
+      localStorage.removeItem(STORE_KEY);
+      location.reload();
+    }
+
+    document.addEventListener('change', saveState);
+    document.addEventListener('input',  saveState);
+    init();
+  </script>
+</body>
+</html>
