@@ -3,6 +3,7 @@ import { db } from "./firebase.js";
 import { collection, getDocs, query, orderBy }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { LOCALES } from "./data.js";
+import { renderTabConsolidado } from "./consolidado.js";
 
 const BLUE  = "#0053e2";
 const SPARK = "#ffc220";
@@ -95,8 +96,9 @@ export async function resumen() {
 
 function renderShell() {
   const tabs = [
-    { id: "dashboard", label: "Resumen" },
-    { id: "desempeno", label: "Desempeno por Local" },
+    { id: "dashboard",   label: "Resumen" },
+    { id: "desempeno",   label: "Desempeno por Local" },
+    { id: "consolidado", label: "Consolidado" },
   ];
 
   const hasFilter = _filterFrom || _filterTo;
@@ -176,8 +178,9 @@ function bindTabs(stats, docs) {
     _filterFrom = _filterTo = ""; // reset al cambiar modo
     renderShell();
     bindTabs(stats, docs); // re-bind con los mismos datos (sin recargar Firebase)
-    if (activeTab === "dashboard") renderTabResumen(stats, docs);
-    else                           renderTabDesempeno(stats, docs);
+    if      (activeTab === "dashboard")   renderTabResumen(stats, docs);
+    else if (activeTab === "consolidado") renderTabConsolidado(docs);
+    else                                  renderTabDesempeno(stats, docs);
   };
   document.getElementById("modeRango")?.addEventListener("click", () => switchMode("rango"));
   document.getElementById("modeFecha")?.addEventListener("click", () => switchMode("fecha"));
@@ -194,8 +197,9 @@ function bindTabs(stats, docs) {
     const { stats: s2, docs: d2 } = await loadStats();
     renderShell();
     bindTabs(s2, d2);
-    if (activeTab === "dashboard") renderTabResumen(s2, d2);
-    else                           renderTabDesempeno(s2, d2);
+    if      (activeTab === "dashboard")   renderTabResumen(s2, d2);
+    else if (activeTab === "consolidado") renderTabConsolidado(d2);
+    else                                  renderTabDesempeno(s2, d2);
   };
   document.getElementById("btnFiltrar")?.addEventListener("click", applyDateFilter);
   document.getElementById("filterFecha")?.addEventListener("keydown", e => e.key === "Enter" && applyDateFilter());
@@ -217,8 +221,9 @@ function bindTabs(stats, docs) {
       activeTab = btn.dataset.tab;
       document.querySelectorAll(".res-tab").forEach(b => b.className = tabBtnCls(false));
       btn.className = tabBtnCls(true);
-      if (activeTab === "dashboard") renderTabResumen(stats, docs);
-      else                           renderTabDesempeno(stats, docs);
+      if      (activeTab === "dashboard")   renderTabResumen(stats, docs);
+      else if (activeTab === "consolidado") renderTabConsolidado(docs);
+      else                                  renderTabDesempeno(stats, docs);
     });
   });
 }
